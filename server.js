@@ -4,7 +4,7 @@ const PORT = process.env.PORT || 3000;
 const wss = new WebSocketServer({ port: PORT });
 
 let serverClient = null;
-let normalClient = [];
+let normalClient = null;
 
 wss.on("connection", ws => {
   ws.on("message", msg => {
@@ -18,7 +18,7 @@ wss.on("connection", ws => {
     }
 
     if (msg === "__CLIENT__") {
-      normalClient.push(ws);
+      normalClient = ws;
       console.log("Normal client registered");
       return;
     }
@@ -40,3 +40,4 @@ wss.on("connection", ws => {
 });
 
 console.log("Role-based relay running on port", PORT);
+
