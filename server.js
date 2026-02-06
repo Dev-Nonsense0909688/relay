@@ -13,8 +13,10 @@ const clientToServer = new Map();
 const serverToClient = new Map();
 
 wss.on("connection", ws => {
-  ws.on("message", msg => {
-    msg = msg.toString();
+  ws.on("message", data => {
+    const msg = data.toString();
+
+    /* ---------------- HANDSHAKES ---------------- */
 
     // SERVER REGISTRATION
     if (msg.startsWith("__SERVER__:")) {
@@ -38,25 +40,28 @@ wss.on("connection", ws => {
       serverToClient.set(serverWs, ws);
 
       ws.send(`CONNECTED:${id}`);
-      console.log(`Client connected to server: ${id}`);
+      console.log(`Client linked to server: ${id}`);
       return;
     }
+
+    /* ---------------- ROUTING ---------------- */
 
     // CLIENT → SERVER (command)
     if (clientToServer.has(ws)) {
       const serverWs = clientToServer.get(ws);
       if (serverWs.readyState === WebSocket.OPEN) {
-        serverWs.send(msg);
+        serverWs.send(msg); // instant forward
       }
       return;
     }
 
-    // SERVER → CLIENT (command output / feedback)
+    // SERVER → CLIENT (feedback)
     if (serverToClient.has(ws)) {
       const clientWs = serverToClient.get(ws);
       if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(msg);
+        clientWs.send(msg); // instant return
       }
+      return;
     }
   });
 
@@ -79,4 +84,4 @@ wss.on("connection", ws => {
   });
 });
 
-console.log("relay running on port", PORT);
+console.log("Instant command relay running on port", PORT);
