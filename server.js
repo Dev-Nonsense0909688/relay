@@ -3,36 +3,36 @@ import WebSocket, { WebSocketServer } from "ws";
 const PORT = process.env.PORT || 3000;
 const wss = new WebSocketServer({ port: PORT });
 
-// server_id -> server ws
+// serverId -> server socket
 const servers = new Map();
 
-// client ws -> server ws
+// client socket -> server socket
 const clientToServer = new Map();
 
-// server ws -> client ws
+// server socket -> client socket
 const serverToClient = new Map();
 
 wss.on("connection", ws => {
   ws.on("message", data => {
     const msg = data.toString();
 
-    /* ---------------- HANDSHAKES ---------------- */
+    /* -------- HANDSHAKE -------- */
 
-    // SERVER REGISTRATION
+    // Register server
     if (msg.startsWith("__SERVER__:")) {
-      const id = msg.split(":")[1];
+      const id = msg.slice("__SERVER__:".length);
       servers.set(id, ws);
-      console.log(`Server registered: ${id}`);
+      console.log(`[SERVER] registered: ${id}`);
       return;
     }
 
-    // CLIENT SELECTS SERVER
+    // Client selects server
     if (msg.startsWith("__SELECT__:")) {
-      const id = msg.split(":")[1];
+      const id = msg.slice("__SELECT__:".length);
       const serverWs = servers.get(id);
 
       if (!serverWs || serverWs.readyState !== WebSocket.OPEN) {
-        ws.send(`ERROR: server '${id}' not available`);
+        ws.send(`ERROR|server '${id}' not available`);
         return;
       }
 
@@ -40,48 +40,48 @@ wss.on("connection", ws => {
       serverToClient.set(serverWs, ws);
 
       ws.send(`CONNECTED:${id}`);
-      console.log(`Client linked to server: ${id}`);
+      console.log(`[CLIENT] linked to server: ${id}`);
       return;
     }
 
-    /* ---------------- ROUTING ---------------- */
+    /* -------- ROUTING -------- */
 
-    // CLIENT → SERVER (command)
+    // Client → Server (command with ID)
     if (clientToServer.has(ws)) {
       const serverWs = clientToServer.get(ws);
       if (serverWs.readyState === WebSocket.OPEN) {
-        serverWs.send(msg); // instant forward
+        serverWs.send(msg);
       }
       return;
     }
 
-    // SERVER → CLIENT (feedback)
+    // Server → Client (response with same ID)
     if (serverToClient.has(ws)) {
       const clientWs = serverToClient.get(ws);
       if (clientWs.readyState === WebSocket.OPEN) {
-        clientWs.send(msg); // instant return
+        clientWs.send(msg);
       }
       return;
     }
   });
 
   ws.on("close", () => {
-    // client cleanup
+    // Client cleanup
     if (clientToServer.has(ws)) {
       const serverWs = clientToServer.get(ws);
       clientToServer.delete(ws);
       serverToClient.delete(serverWs);
     }
 
-    // server cleanup
+    // Server cleanup
     for (const [id, serverWs] of servers.entries()) {
       if (serverWs === ws) {
         servers.delete(id);
         serverToClient.delete(ws);
-        console.log(`Server disconnected: ${id}`);
+        console.log(`[SERVER] disconnected: ${id}`);
       }
     }
   });
 });
 
-console.log("Instant command relay running on port", PORT);
+console.log("Render relay (ID-safe, bidirectional) running on port", PORT);
