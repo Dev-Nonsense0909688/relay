@@ -39,7 +39,6 @@ wss.on("connection", ws => {
       clientToServer.set(ws, serverWs);
       serverToClient.set(serverWs, ws);
 
-      ws.send(`CONNECTED:${id}`);
       console.log(`[CLIENT] linked to server: ${id}`);
       return;
     }
@@ -85,3 +84,4 @@ wss.on("connection", ws => {
 });
 
 console.log("Render relay (ID-safe, bidirectional) running on port", PORT);
+
