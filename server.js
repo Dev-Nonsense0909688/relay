@@ -3,11 +3,14 @@ import WebSocket, { WebSocketServer } from "ws";
 const PORT = process.env.PORT || 3000;
 const wss = new WebSocketServer({ port: PORT });
 
-// server_id -> ws
+// server_id -> server ws
 const servers = new Map();
 
-// client ws -> selected server_id
-const clientSelection = new Map();
+// client ws -> server ws
+const clientToServer = new Map();
+
+// server ws -> client ws
+const serverToClient = new Map();
 
 wss.on("connection", ws => {
   ws.on("message", msg => {
@@ -24,36 +27,56 @@ wss.on("connection", ws => {
     // CLIENT SELECTS SERVER
     if (msg.startsWith("__SELECT__:")) {
       const id = msg.split(":")[1];
+      const serverWs = servers.get(id);
 
-      if (!servers.has(id)) {
-        ws.send(`ERROR: server '${id}' not found`);
+      if (!serverWs || serverWs.readyState !== WebSocket.OPEN) {
+        ws.send(`ERROR: server '${id}' not available`);
         return;
       }
 
-      clientSelection.set(ws, id);
+      clientToServer.set(ws, serverWs);
+      serverToClient.set(serverWs, ws);
+
       ws.send(`CONNECTED:${id}`);
-      console.log(`Client selected server: ${id}`);
+      console.log(`Client connected to server: ${id}`);
       return;
     }
 
-    // CLIENT → SERVER
-    const targetId = clientSelection.get(ws);
-    if (targetId && servers.get(targetId)?.readyState === WebSocket.OPEN) {
-      servers.get(targetId).send(msg);
+    // CLIENT → SERVER (command)
+    if (clientToServer.has(ws)) {
+      const serverWs = clientToServer.get(ws);
+      if (serverWs.readyState === WebSocket.OPEN) {
+        serverWs.send(msg);
+      }
+      return;
+    }
+
+    // SERVER → CLIENT (command output / feedback)
+    if (serverToClient.has(ws)) {
+      const clientWs = serverToClient.get(ws);
+      if (clientWs.readyState === WebSocket.OPEN) {
+        clientWs.send(msg);
+      }
     }
   });
 
   ws.on("close", () => {
-    // cleanup servers
-    for (const [id, sock] of servers.entries()) {
-      if (sock === ws) {
+    // client cleanup
+    if (clientToServer.has(ws)) {
+      const serverWs = clientToServer.get(ws);
+      clientToServer.delete(ws);
+      serverToClient.delete(serverWs);
+    }
+
+    // server cleanup
+    for (const [id, serverWs] of servers.entries()) {
+      if (serverWs === ws) {
         servers.delete(id);
+        serverToClient.delete(ws);
         console.log(`Server disconnected: ${id}`);
       }
     }
-
-    clientSelection.delete(ws);
   });
 });
 
-console.log("Relay with server selection running on port", PORT);
+console.log("relay running on port", PORT);
