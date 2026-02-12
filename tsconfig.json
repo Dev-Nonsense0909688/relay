@@ -2,8 +2,11 @@
   "compilerOptions": {
     "target": "ES2022",
     "module": "ES2022",
+    "moduleResolution": "nodenext",
     "outDir": "dist",
     "strict": true,
-    "esModuleInterop": true
+    "esModuleInterop": true,
+    "lib": ["ES2022"],
+    "types": ["node"]
   }
 }
