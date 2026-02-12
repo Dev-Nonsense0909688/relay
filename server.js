@@ -7,7 +7,9 @@ const server = http.createServer();
 const wss = new WebSocketServer({ server });
 
 let agent = null;
-const clients = new Set();
+
+// sessionId -> client socket
+const sessions = new Map();
 
 wss.on("connection", (ws, req) => {
     const path = req.url;
@@ -17,10 +19,17 @@ wss.on("connection", (ws, req) => {
         console.log("Agent connected");
         agent = ws;
 
-        ws.on("message", (data) => {
-            for (const client of clients)
-                if (client.readyState === 1)
-                    client.send(data);
+        ws.on("message", (raw) => {
+            try {
+                const msg = JSON.parse(raw.toString());
+
+                // send output only to correct client
+                if (msg.id && sessions.has(msg.id)) {
+                    const client = sessions.get(msg.id);
+                    if (client.readyState === 1)
+                        client.send(JSON.stringify(msg));
+                }
+            } catch {}
         });
 
         ws.on("close", () => {
@@ -34,15 +43,34 @@ wss.on("connection", (ws, req) => {
     // CLIENT CONNECT
     if (path === "/client") {
         console.log("Client connected");
-        clients.add(ws);
 
-        ws.on("message", (data) => {
-            if (agent && agent.readyState === 1)
-                agent.send(data);
+        ws.on("message", (raw) => {
+            try {
+                const msg = JSON.parse(raw.toString());
+
+                // register session
+                if (msg.type === "open") {
+                    sessions.set(msg.id, ws);
+                }
+
+                // remove session
+                if (msg.type === "close") {
+                    sessions.delete(msg.id);
+                }
+
+                // forward to agent
+                if (agent && agent.readyState === 1) {
+                    agent.send(JSON.stringify(msg));
+                }
+
+            } catch {}
         });
 
         ws.on("close", () => {
-            clients.delete(ws);
+            // remove all sessions belonging to this socket
+            for (const [id, sock] of sessions) {
+                if (sock === ws) sessions.delete(id);
+            }
             console.log("Client disconnected");
         });
     }
